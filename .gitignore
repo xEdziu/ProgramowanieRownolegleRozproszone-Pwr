@@ -1,0 +1,68 @@
+# --- Visual Studio / .NET ---
+.vs/
+.vscode/
+**/bin/
+**/obj/
+**/Debug/
+**/Release/
+**/x64/
+**/x86/
+**/ARM*/
+**/publish/
+**/TestResults/
+**/.vs/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Build artifacts
+*.pdb
+*.exe
+*.dll
+*.cache
+*.tmp
+*.temp
+*.ilk
+*.log
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+*.nuget.props
+*.nuget.targets
+*.nuget.cache
+
+# Generated code
+**/*.g.cs
+**/*.generated.cs
+**/*.AssemblyInfo.cs
+**/*.GlobalUsings.g.cs
+**/*.genruntimeconfig.cache
+
+# Rider / ReSharper
+.idea/
+*.sln.iml
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Databases / indices (e.g., Copilot/VS caches)
+*.db
+*.db-shm
+*.db-wal
+*.vsidx
+
+# Coverage
+coverage/
+*.opencover.xml
+*.coverage
+*.coveragexml
+
+# OS junk
+.DS_Store
+Thumbs.db
