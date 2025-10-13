@@ -2,18 +2,46 @@
 {
     internal class Program
     {
-        static readonly int[] MinersCount = { 1, 2, 3, 4, 5, 6 };
-        const int InitialOre = 2000;
+        static readonly int[] MinersCount = { 2, 3, 4, 5, 6 };
+        static readonly (string name, int ore, int slots, int travelMs)[] SitesConfig = new[]
+        {
+            ("Ore A", 2000, 2, 10000),
+            ("Ore B", 2600,  1,  16000),
+        };
+        const int WarehouseSlots = 2;
         const int VehicleCapacity = 200;
         const int TimeAquiringOneUnit = 10; //ms
         const int TimeUnloadingOneUnit = 10; //ms
-        const int TimeToTravelToDestination = 10000; //ms => 10s
+        static readonly ThreadLocal<Random> _rng = new ThreadLocal<Random>(() => new Random());
+
+        enum SelectionMode
+        {
+            Random,
+            MostFreeSlots
+        }
+
+        class OreSite
+        {
+            public string Name { get; }
+            public int TravelMs { get; }
+            public SemaphoreSlim Mine { get; }
+            public object Lock { get; } = new object();
+            public int OreRemaining;
+
+            public OreSite(string name, int ore, int slots, int travelMs)
+            {
+                Name = name;
+                OreRemaining = ore;
+                Mine = new SemaphoreSlim(slots, slots);
+                TravelMs = travelMs;
+            }
+        }
+
 
         class SimulationResult
         {
             public int NumberOfMiners { get; set; }
             public int TotalTime { get; set; }
-            public int FinalWarehouse { get; set; }
         }
 
 
@@ -21,42 +49,65 @@
         {
             Console.Clear();
 
-            var results = new List<SimulationResult>();
-            double initialTime = 0;
+            var resultsRandom = new List<SimulationResult>();
+            var resultsMostSlots = new List<SimulationResult>();
 
+            int totalStartTime = Environment.TickCount;
+
+            int[] winsPerMode = { 0, 0 };
             foreach (int count in MinersCount)
             {
-                var result = RunSimulation(count);
-                results.Add(result);
+                var resultRandom = RunSimulation(count, SelectionMode.Random);
+                var resultMostSlots = RunSimulation(count, SelectionMode.MostFreeSlots);
 
-                if (count == MinersCount[0])
+                resultsRandom.Add(resultRandom);
+                resultsMostSlots.Add(resultMostSlots);
+
+                if (resultRandom.TotalTime < resultMostSlots.TotalTime)
                 {
-                    initialTime = result.TotalTime;
+                    winsPerMode[0]++;
+                }
+                else if (resultRandom.TotalTime > resultMostSlots.TotalTime)
+                {
+                    winsPerMode[1]++;
                 }
             }
+            int totalEndTime = Environment.TickCount;
 
             Console.WriteLine("\n=== SUMMARY ===");
-            foreach (var r in results)
+            Console.WriteLine("\n--- Selection mode: Random ---");
+            foreach (var r in resultsRandom)
             {
                 double time = r.TotalTime;
-                double speedup = initialTime / time; // speedup = T1 / Tp
+                double speedup = resultsRandom[0].TotalTime / time; // speedup = T1 / Tp
+                double efficiency = speedup / r.NumberOfMiners; // efficiency = speedup / p
+                Console.WriteLine($"{r.NumberOfMiners} miners → time {r.TotalTime}s; acceleration: {speedup:F2}; efficiency: {efficiency:F2}");
+            }
+            Console.WriteLine("\n--- Selection mode: Most free slots ---");
+            foreach (var r in resultsMostSlots)
+            {
+                double time = r.TotalTime;
+                double speedup = resultsMostSlots[0].TotalTime / time; // speedup = T1 / Tp
                 double efficiency = speedup / r.NumberOfMiners; // efficiency = speedup / p
                 Console.WriteLine($"{r.NumberOfMiners} miners → time {r.TotalTime}s; acceleration: {speedup:F2}; efficiency: {efficiency:F2}");
             }
 
+            Console.WriteLine("\nAmounts each mode performed better:");
+            Console.WriteLine($"Random: {winsPerMode[0]}");
+            Console.WriteLine($"Most free slots: {winsPerMode[1]}");
+            Console.WriteLine($"\nTotal time it took to run the simulations: {(totalEndTime - totalStartTime) / 1000}s");
+
         }
 
-        static SimulationResult RunSimulation(int NumberOfMiners)
+        static SimulationResult RunSimulation(int NumberOfMiners, SelectionMode mode)
         {
-            int Ore1 = InitialOre;
             int Warehouse = 0;
             int minerId = 0;
 
-            var lockMine = new object();
             var lockWarehouse = new object();
+            SemaphoreSlim warehouseSem = new SemaphoreSlim(WarehouseSlots, WarehouseSlots);
 
-            SemaphoreSlim mine = new SemaphoreSlim(2, 2);
-            SemaphoreSlim warehouse = new SemaphoreSlim(1, 1);
+            var ores = SitesConfig.Select(cfg => new OreSite(cfg.name, cfg.ore, cfg.slots, cfg.travelMs)).ToList();
 
             object consoleLock = new object();
             string[] minerStatus = new string[NumberOfMiners];
@@ -68,12 +119,29 @@
                 minerStatus[i] = "Starting...";
             }
             var cts = new CancellationTokenSource();
-            var displayTask = Task.Run(() => DisplayLoop(cts.Token, mine, warehouse, consoleLock, minerStatus, () => Ore1, () => Warehouse, NumberOfMiners));
+            var displayTask = Task.Run(() => DisplayLoop(
+                cts.Token,
+                mode,
+                warehouseSem,
+                consoleLock,
+                minerStatus,
+                ores,
+                () => Warehouse));
+
             // Start time
             int startTime = Environment.TickCount;
             for (int i = 0; i < NumberOfMiners; i++)
             {
-                miners[i] = Task.Run(() => DoMining(mine, warehouse, lockMine, lockWarehouse, minerStatus, ref Ore1, ref Warehouse, ref minerId));
+                miners[i] = Task.Run(() =>
+            DoMining(
+                ores,
+                mode,
+                warehouseSem,
+                lockWarehouse,
+                minerStatus,
+                ref Warehouse,
+                ref minerId
+            ));
             }
             Task.WaitAll(miners);
             // End time
@@ -84,47 +152,58 @@
             return new SimulationResult
             {
                 NumberOfMiners = NumberOfMiners,
-                TotalTime = (endTime - startTime) / 1000,
-                FinalWarehouse = Warehouse
+                TotalTime = (endTime - startTime) / 1000
             };
 
         }
 
         static void DoMining(
-            SemaphoreSlim mine,
-            SemaphoreSlim warehouse,
-            object lockMine,
+            List<OreSite> ores,
+            SelectionMode mode,
+            SemaphoreSlim warehouseSem,
             object lockWarehouse,
             string[] minerStatus,
-            ref int Ore1,
             ref int Warehouse,
             ref int minerId
         )
         {
             int idx = Interlocked.Increment(ref minerId) - 1;
-            while (Ore1 > 0)
+            while (true)
             {
-                // Mining
-                minerStatus[idx] = "Waiting for mine access";
-                mine.Wait();
-                minerStatus[idx] = "Mining";
-                int amountToMine;
-                lock (lockMine)
+                // Choosing ore
+                var ore = ChooseOre(ores, mode);
+                if (ore == null)
                 {
-                    amountToMine = Math.Min(VehicleCapacity, Ore1);
+                    minerStatus[idx] = "Finished";
+                    break;
+                }
+                // Accesing the mine
+                minerStatus[idx] = $"Waiting for mine access for {ore.Name}";
+                ore.Mine.Wait();
+                // Mining
+                minerStatus[idx] = $"Mining at {ore.Name}";
+                int amountToMine;
+                lock (ore.Lock)
+                {
+                    amountToMine = Math.Min(VehicleCapacity, ore.OreRemaining);
+                    if (amountToMine == 0)
+                    {
+                        ore.Mine.Release();
+                        continue;
+                    }
                     for (int i = 0; i < amountToMine; i++)
                     {
                         Thread.Sleep(TimeAquiringOneUnit);
-                        Ore1--;
+                        ore.OreRemaining--;
                     }
                 }
-                mine.Release();
+                ore.Mine.Release();
                 // Traveling to warehouse
                 minerStatus[idx] = "Traveling to warehouse";
-                Thread.Sleep(TimeToTravelToDestination);
+                Thread.Sleep(ore.TravelMs);
                 // Unloading
                 minerStatus[idx] = "Waiting for warehouse access";
-                warehouse.Wait();
+                warehouseSem.Wait();
                 minerStatus[idx] = "Unloading";
                 lock (lockWarehouse)
                 {
@@ -135,28 +214,44 @@
                     }
                     minerStatus[idx] = "Unloaded";
                 }
-                warehouse.Release();
-                // Don't continue if no ore left
-                if (Ore1 <= 0)
-                {
-                    minerStatus[idx] = "Finished";
-                    break;
-                }
+                warehouseSem.Release();
                 // Traveling back to mine
-                minerStatus[idx] = "Traveling back to mine";
-                Thread.Sleep(TimeToTravelToDestination);
+                minerStatus[idx] = $"Traveling to {ore.Name}";
+                Thread.Sleep(ore.TravelMs);
             }
         }
 
+        static OreSite? ChooseOre(List<OreSite> ores, SelectionMode mode)
+        {
+            var candidates = ores.Where(o => Volatile.Read(ref o.OreRemaining) > 0).ToList();
+            if (candidates.Count == 0) return null;
+
+            switch (mode)
+            {
+                case SelectionMode.Random:
+                    return candidates[_rng.Value!.Next(candidates.Count)];
+
+                case SelectionMode.MostFreeSlots:
+                    return candidates
+                        .OrderByDescending(o => o.Mine.CurrentCount)
+                        .ThenByDescending(o => o.OreRemaining)
+                        .ThenBy(o => o.TravelMs)
+                        .First();
+
+                default:
+                    return candidates[0];
+            }
+        }
+
+
         static void DisplayLoop(
             CancellationToken token,
-            SemaphoreSlim mine,
-            SemaphoreSlim warehouse,
+            SelectionMode mode,
+            SemaphoreSlim warehouseSem,
             object consoleLock,
             string[] minerStatus,
-            Func<int> getOre1,
-            Func<int> getWarehouse,
-            int NumberOfMiners
+            List<OreSite> ores,
+            Func<int> getWarehouse
             )
         {
             while (!token.IsCancellationRequested)
@@ -166,29 +261,30 @@
                     Console.SetCursorPosition(0, 0);
                     Console.WriteLine("=== LIVE SIMULATION STATUS ===".PadRight(60));
 
-                    Console.SetCursorPosition(0, 2);
-                    Console.WriteLine($"Ore remaining: {getOre1()} units".PadRight(60));
+                    int row = 2;
+                    Console.SetCursorPosition(0, row++);
+                    Console.WriteLine($"--- Selection mode: {mode} ---".PadRight(60));
 
-                    Console.SetCursorPosition(0, 3);
-                    Console.WriteLine($"Warehouse: {getWarehouse()} units".PadRight(60));
-
-                    Console.SetCursorPosition(0, 4);
-                    Console.WriteLine($"Mine semaphore free slots: {mine.CurrentCount}".PadRight(60));
-
-                    Console.SetCursorPosition(0, 5);
-                    Console.WriteLine($"Warehouse semaphore free slots: {warehouse.CurrentCount}".PadRight(60));
-
-                    Console.SetCursorPosition(0, 6);
-                    Console.WriteLine(new string('-', 60));
-
-                    for (int i = 0; i < NumberOfMiners; i++)
+                    foreach (var o in ores)
                     {
-                        Console.SetCursorPosition(0, 7 + i);
+                        Console.SetCursorPosition(0, row++);
+                        Console.WriteLine($"{o.Name}: ore={Volatile.Read(ref o.OreRemaining)} | mine free slots={o.Mine.CurrentCount} | travel={o.TravelMs}ms".PadRight(80));
+                    }
+
+                    Console.SetCursorPosition(0, row++);
+                    Console.WriteLine($"Warehouse: {getWarehouse()} units (free slots: {warehouseSem.CurrentCount})".PadRight(80));
+
+                    Console.SetCursorPosition(0, row++);
+                    Console.WriteLine(new string('-', 64));
+
+                    for (int i = 0; i < minerStatus.Length; i++)
+                    {
+                        Console.SetCursorPosition(0, row++);
                         var st = minerStatus[i] ?? "";
-                        Console.WriteLine($"Miner {i + 1}: {st}".PadRight(60));
+                        Console.WriteLine($"Miner {i + 1}: {st}".PadRight(80));
                     }
                 }
-                Thread.Sleep(50);
+                Thread.Sleep(100);
             }
         }
     }
