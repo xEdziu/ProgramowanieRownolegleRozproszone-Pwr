@@ -20,7 +20,7 @@ Pełna instrukcja znajduje się w pliku [Lista 1.pdf](https://kam.pwr.edu.pl/pio
 Poniżej znajdują się otrzymane wyniki dla 3. podpunktu - czasy ukończenia wykopalisk, wykorzystując parametry podane w instrukcji.
 
 | Miners | Time (ms) | Acceleration | Efficiency |
-| -----: | --------: | -----------: | ---------: |
+| :-----: | :--------: | :-----------: | :---------: |
 |      1 |       254 |         1,00 |       1,00 |
 |      2 |       125 |         2,03 |       1,02 |
 |      3 |        96 |         2,65 |       0,88 |
