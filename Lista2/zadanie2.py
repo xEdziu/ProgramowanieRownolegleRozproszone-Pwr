@@ -7,7 +7,7 @@ import locale
 locale.getpreferredencoding = lambda: "UTF-8"
 
 kernel_code = """
-__global void matrixMul(float *A, float *B, float *C, int N) {
+__global__ void matrixMul(float *A, float *B, float *C, int N) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     float sum = 0.0;
