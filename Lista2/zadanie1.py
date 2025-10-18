@@ -17,3 +17,7 @@ C_gpu = cp.matmul(A_gpu, B_gpu)
 cp.cuda.Stream.null.synchronize() # Synchronizujemy się z GPU
 stop_gpu = time.time()
 print(f"Mnożenie macierzy na GPU trawło: {stop_gpu - start_gpu:.5f} sekund")
+# czyszczenie pamięciu gpu
+del A_gpu
+del B_gpu
+del C_gpu
