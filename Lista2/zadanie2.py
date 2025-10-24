@@ -49,7 +49,7 @@ matrixMul(A_gpu, B_gpu, C_gpu, np.int32(N), block=block_size, grid=grid_size)
 cuda.Context.synchronize()
 end_time = time.time()
 cuda.memcpy_dtoh(C_cpu, C_gpu)
-print(f"Niskopoziomowe mnożenie macierzy na GPU trawło: {end_time - start_time:.5f} sekund")
+print(f"Niskopoziomowe mnożenie macierzy na GPU trwało: {end_time - start_time:.5f} sekund")
 
 # zwolnienie zablokowanych zmiennych na gpu
 del A_gpu

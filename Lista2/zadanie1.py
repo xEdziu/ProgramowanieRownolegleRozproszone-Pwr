@@ -11,12 +11,12 @@ B_gpu = cp.array(B_cpu)
 start_cpu = time.time()
 C_cpu = np.matmul(A_cpu, B_cpu)
 stop_cpu = time.time()
-print(f"Mnożenie macierzy na CPU trawło: {stop_cpu - start_cpu:.5f} sekund")
+print(f"Mnożenie macierzy na CPU trwało: {stop_cpu - start_cpu:.5f} sekund")
 start_gpu = time.time()
 C_gpu = cp.matmul(A_gpu, B_gpu)
 cp.cuda.Stream.null.synchronize() # Synchronizujemy się z GPU
 stop_gpu = time.time()
-print(f"Mnożenie macierzy na GPU trawło: {stop_gpu - start_gpu:.5f} sekund")
+print(f"Mnożenie macierzy na GPU trwało: {stop_gpu - start_gpu:.5f} sekund")
 # czyszczenie pamięciu gpu
 del A_gpu
 del B_gpu
