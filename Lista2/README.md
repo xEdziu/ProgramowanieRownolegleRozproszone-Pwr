@@ -13,3 +13,9 @@ Celem laboratorium jest zapoznanie się z wykonywaniem obliczeń z wykorzystanie
 ## Pełna instrukcja
 
 Pełna instrukcja znajduje się w pliku [Lista 2.pdf](https://kam.pwr.edu.pl/piotr-p-nowakpwr-edu-pl/files//Materia%C5%82y/Programowanie%20r%C3%B3wnoleg%C5%82e%20i%20rozproszone/Lista%202.pdf).
+
+## Wyniki
+
+Poniżej znajdują się otrzymane wyniki dla 3. podpunktu.
+
+<img width="576" height="455" alt="image" src="https://github.com/user-attachments/assets/1c2a281f-e545-4365-ba9d-e0438de8b3e2" />
