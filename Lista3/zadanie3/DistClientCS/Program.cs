@@ -12,7 +12,6 @@ class Program
 {
     static int[][][] Deserialize3D(byte[] json)
     {
-        // Jagged arrays dobrze współpracują z System.Text.Json
         var data = JsonSerializer.Deserialize<int[][][]>(json) ?? throw new Exception("Deserialization returned null");
         return data;
     }
