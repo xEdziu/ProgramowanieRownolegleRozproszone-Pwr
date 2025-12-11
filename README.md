@@ -10,3 +10,6 @@
 
 ### Rozwiązanie zadań
 - [Lista1](Lista1/Program.cs)
+- [Lista2](Lista2)
+- [Lista3](Lista3)
+- [Lista4](Lista4)
